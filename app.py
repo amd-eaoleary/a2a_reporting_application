@@ -38,71 +38,88 @@ def view_execution_history():
     page = request.args.get('page', default=1, type=int)
 
     items_per_page = 100
-
-    # Building the SQL query with user filters
+    parameters = {}
+    
+    # Start building the SQL query
     query = 'SELECT * FROM "A2AMON"."A2A_EXECUTION_HISTORY" WHERE 1=1'
 
     if search_process:
-        query += f" AND lower(process_name) LIKE lower('%%{search_process}%%')"
+        # Split the input on commas and prepare a condition
+        process_names = [name.strip().lower() for name in search_process.split(',')]
+        query += " AND lower(process_name) IN :process_names"
+        parameters['process_names'] = tuple(process_names)
 
     if status_filter:
-        query += f" AND execution_status = '{status_filter}'"
+        query += " AND execution_status = :status_filter"
+        parameters['status_filter'] = status_filter
 
     if date_start:
-        query += f" AND execution_start >= '{date_start}'"
+        query += " AND execution_start >= :date_start"
+        parameters['date_start'] = date_start
 
     if date_end:
-        query += f" AND execution_start <= '{date_end}'"
+        query += " AND execution_start <= :date_end"
+        parameters['date_end'] = date_end
 
     # Add LIMIT and OFFSET for pagination
-    query += f" ORDER BY execution_start DESC LIMIT {items_per_page} OFFSET {(page - 1) * items_per_page};"
+    query += " ORDER BY execution_start DESC LIMIT :limit OFFSET :offset"
+    parameters['limit'] = items_per_page
+    parameters['offset'] = (page - 1) * items_per_page
 
+    # Debug log for the query and parameters
+    print("Executing SQL Query:", query)
+    print("With Parameters:", parameters)
+
+    # Execute the query
     with db.engine.connect() as connection:
-        result = connection.execute(text(query))
-        all_execution_records = []
+        result = connection.execute(text(query), parameters)
+        
+        # Convert each row to a dictionary using mappings()
+        all_execution_records = [dict(row) for row in result.mappings()]
 
-        for row in result:
-            record = {
-                'process_name': row[0],
-                'execution_status': row[1],
-                'execution_start': row[2],
-                'execution_end': row[3],
-                'execution_duration': row[4],
-                'WHEN_INSERTED': row[5],
-                'message_guid': row[6],
-            }
-            all_execution_records.append(record)
-
-    # Get the total number of records for pagination
+    # Calculate the total number of records (for pagination)
     count_query = 'SELECT COUNT(*) FROM "A2AMON"."A2A_EXECUTION_HISTORY" WHERE 1=1'
+    count_parameters = {}
 
     if search_process:
-        count_query += f" AND process_name LIKE '%%{search_process}%%'"
+        count_query += " AND lower(process_name) IN :process_names"
+        count_parameters['process_names'] = tuple(process_names)
 
     if status_filter:
-        count_query += f" AND execution_status = '{status_filter}'"
+        count_query += " AND execution_status = :status_filter"
+        count_parameters['status_filter'] = status_filter
 
     if date_start:
-        count_query += f" AND execution_start >= '{date_start}'"
+        count_query += " AND execution_start >= :date_start"
+        count_parameters['date_start'] = date_start
 
     if date_end:
-        count_query += f" AND execution_start <= '{date_end}'"
-    count_query += ';'
+        count_query += " AND execution_start <= :date_end"
+        count_parameters['date_end'] = date_end
 
     with db.engine.connect() as connection:
-        total_records = connection.scalar(text(count_query))
-        total_pages = (total_records // items_per_page) + int(bool(total_records % items_per_page))
+        count_result = connection.execute(text(count_query), count_parameters)
+        total_records = count_result.scalar()  # Get the count from the result
+
+    total_pages = (total_records + items_per_page - 1) // items_per_page  # Calculate total pages
 
     return render_template('execution_history.html', records=all_execution_records, page=page, total_pages=total_pages)
 
-
 @app.route('/view_integration_content', methods=['GET'])
 def view_integration_content():
-    query = text('SELECT * FROM "A2AMON"."A2A_IFLOW_DATA";')
-    with db.engine.connect() as connection:
-        result = connection.execute(query)
-        iflow_data = []
+    page = request.args.get('page', default=1, type=int)
+    items_per_page = 100
+    offset = (page - 1) * items_per_page
 
+    # SQL to fetch paginated data
+    query = text('SELECT * FROM "A2AMON"."A2A_IFLOW_DATA" LIMIT :limit OFFSET :offset')
+    count_query = 'SELECT COUNT(*) FROM "A2AMON"."A2A_IFLOW_DATA"'
+
+    with db.engine.connect() as connection:
+        # Fetch paginated IFLOW data
+        result = connection.execute(query, {'limit': items_per_page, 'offset': offset})
+        iflow_data = []
+        
         for row in result:
             record = {
                 'id': row[0],
@@ -117,7 +134,15 @@ def view_integration_content():
             }
             iflow_data.append(record)
 
-    return render_template('iflow_data.html', records=iflow_data)
+        # Fetch total record count without pagination
+        count_result = connection.execute(text(count_query))
+        total_records = count_result.scalar()  # Get the count from the result
+
+    # Calculate total pages
+    total_pages = (total_records + items_per_page - 1) // items_per_page
+
+    return render_template('iflow_data.html', records=iflow_data, page=page, total_pages=total_pages)
+
 
 @app.route('/download_csv', methods=['GET'])
 def download_csv():
@@ -126,43 +151,45 @@ def download_csv():
     date_start = request.args.get('date_start', default=None, type=str)
     date_end = request.args.get('date_end', default=None, type=str)
 
-    # Building the SQL query with user filters
+    parameters = {}
     query = 'SELECT * FROM "A2AMON"."A2A_EXECUTION_HISTORY" WHERE 1=1'
 
     if search_process:
-        query += f" AND process_name LIKE '%%{search_process}%%'"
+        process_names = [name.strip().lower() for name in search_process.split(',')]
+        query += " AND lower(process_name) IN :process_names"
+        parameters['process_names'] = tuple(process_names)
 
     if status_filter:
-        query += f" AND execution_status = '{status_filter}'"
+        query += " AND execution_status = :status_filter"
+        parameters['status_filter'] = status_filter
 
     if date_start:
-        query += f" AND execution_start >= '{date_start}'"
+        query += " AND execution_start >= :date_start"
+        parameters['date_start'] = date_start
 
     if date_end:
-        query += f" AND execution_start <= '{date_end}'"
-    query += ';'
+        query += " AND execution_start <= :date_end"
+        parameters['date_end'] = date_end
 
-    output = io.StringIO()
-    writer = csv.writer(output)
+    query += " ORDER BY execution_start DESC"
 
     with db.engine.connect() as connection:
-        result = connection.execute(text(query))
+        result = connection.execute(text(query), parameters)
+        records = [dict(row) for row in result.mappings()]
 
-        writer.writerow(['Process Name', 'Execution Status', 'Execution Start', 'Execution End',
-                         'Execution Duration', 'WHEN_INSERTED', 'Message GUID'])
+    # Create a CSV response
+    def generate_csv():
+        # Generate CSV from records
+        output = csv.StringIO()
+        writer = csv.DictWriter(output, fieldnames=records[0].keys())
+        writer.writeheader()
+        writer.writerows(records)
+        yield output.getvalue()
 
-        for row in result:
-            record = [row[0], row[1], row[2], row[3], row[4], row[5], row[6]]
-            writer.writerow(record)
+    return Response(generate_csv(), mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=execution_history.csv"})
 
-    # Get current date as a string
-    current_date = datetime.now().date().strftime("%Y-%m-%d")
-
-    # Set filename with the current_date
-    filename = f"execution_history_{current_date}.csv"
-
-    output.seek(0)
-    return Response(output, content_type='text/csv', headers={"Content-Disposition": f'attachment; filename={filename}'})
+# if __name__ == '__main__':
+#     app.run(debug=True,host="0.0.0.0",port=5000)
 
 if __name__ == '__main__':
-    app.run(debug=True,host="0.0.0.0",port=5000)
+    app.run(ssl_context=('cert.pem', 'key.pem'))

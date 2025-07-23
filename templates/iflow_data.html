@@ -13,6 +13,11 @@
         gap: 8px;
         margin-bottom: 16px;
       }
+      .pagination {
+        margin-top: 20px;
+        padding: 10px;
+        text-align: center;
+      }
     </style>
   </head>
 
@@ -21,9 +26,9 @@
     <h1>Integration Flow Content</h1>
 
     <div class="search">
-      <button type="button" onclick="tableToCSV()">
-        Download CSV
-    </button>
+      <input type="text" id="search-id" placeholder="Search by ID" value="{{ search_id }}" />
+      <button type="submit" id="search-submit">Search</button>
+      <button type="button" onclick="tableToCSV()">Download CSV</button>
     </div>
 
     <table>
@@ -57,67 +62,74 @@
       </tbody>
     </table>
 
+    <!-- Pagination -->
+    <div class="pagination">
+      <div class="navigation">
+        {% if page > 1 %}
+          <a href="?page=1&search_id={{ search_id }}">First</a>
+          <a href="?page={{ page - 1 }}&search_id={{ search_id }}">Prev</a>
+        {% endif %}
+        {% if page < total_pages %}
+          <a href="?page={{ page + 1 }}&search_id={{ search_id }}">Next</a>
+          <a href="?page={{ total_pages }}&search_id={{ search_id }}">Last</a>
+        {% endif %}
+      </div>
+      <div class="info">Page {{ page }} of {{ total_pages }}</div>
+    </div>
+
     <script type="text/javascript">
+      document.querySelector("#search-submit").addEventListener("click", function() {
+        const searchValue = document.querySelector("#search-id").value;
+        const url = new URL(window.location.href);
+        url.searchParams.set('search_id', searchValue);
+        url.searchParams.set('page', 1); // Reset to the first page on new search
+        window.location.href = url;
+      });
+
       function tableToCSV() {
-    
-          // Variable to store the final csv data
-          let csv_data = [];
-    
-          // Get each row data
-          let rows = document.getElementsByTagName('tr');
-          for (let i = 0; i < rows.length; i++) {
-    
-              // Get each column data
-              let cols = rows[i].querySelectorAll('td,th');
-    
-              // Stores each csv row data
-              let csvrow = [];
-              for (let j = 0; j < cols.length; j++) {
-    
-                  // Get the text data of each cell
-                  // of a row and push it to csvrow
-                  csvrow.push(cols[j].innerHTML);
-              }
-    
-              // Combine each column value with comma
-              csv_data.push(csvrow.join(","));
+        // Variable to store the final csv data
+        let csv_data = [];
+        // Get each row data
+        let rows = document.getElementsByTagName('tr');
+        for (let i = 0; i < rows.length; i++) {
+          // Get each column data
+          let cols = rows[i].querySelectorAll('td,th');
+          // Stores each csv row data
+          let csvrow = [];
+          for (let j = 0; j < cols.length; j++) {
+            // Get the text data of each cell
+            csvrow.push(cols[j].innerHTML);
           }
-    
-          // Combine each row data with new line character
-          csv_data = csv_data.join('\n');
-    
-          // Call this function to download csv file  
-          downloadCSVFile(csv_data);
-    
+          // Combine each column value with comma
+          csv_data.push(csvrow.join(","));
+        }
+        // Combine each row data with new line character
+        csv_data = csv_data.join('\n');
+        // Call this function to download csv file  
+        downloadCSVFile(csv_data);
       }
-    
+
       function downloadCSVFile(csv_data) {
-    
-          const date = new Date();
-    
-          // Create CSV file object and feed
-          // our csv_data into it
-          CSVFile = new Blob([csv_data], {
-              type: "text/csv"
-          });
-    
-          // Create to temporary link to initiate
-          // download process
-          let temp_link = document.createElement('a');
-    
-          // Download csv file
-          temp_link.download = `Integration_Flow_Content_${date}.csv`;
-          let url = window.URL.createObjectURL(CSVFile);
-          temp_link.href = url;
-    
-          // This link should not be displayed
-          temp_link.style.display = "none";
-          document.body.appendChild(temp_link);
-    
-          // Automatically click the link to
-          // trigger download
-          temp_link.click();
-          document.body.removeChild(temp_link);
+        const date = new Date();
+        // Create CSV file object and feed
+        // our csv_data into it
+        CSVFile = new Blob([csv_data], {
+            type: "text/csv"
+        });
+        // Create to temporary link to initiate
+        // download process
+        let temp_link = document.createElement('a');
+        // Download csv file
+        temp_link.download = `Integration_Flow_Content_${date}.csv`;
+        let url = window.URL.createObjectURL(CSVFile);
+        temp_link.href = url;
+        // This link should not be displayed
+        temp_link.style.display = "none";
+        document.body.appendChild(temp_link);
+        // Automatically click the link to
+        // trigger download
+        temp_link.click();
+        document.body.removeChild(temp_link);
       }
     </script>
 

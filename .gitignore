@@ -1,1 +1,6 @@
 config.ini
+allfiles.sh
+cert.pem
+createcert.txt
+key.pem
+output.txt

@@ -14,10 +14,10 @@
 
 
     <div class="search">
-      <label for="search-process">Search for a process name:</label>
-      <input type="text" id="search-process" name="search-process" placeholder="Search..." value="{{ request.args['search_process'] or '' }}">
-      
-      <button type="submit" id="search-submit">Search</button>
+        <label for="search-process">Search for process names (comma-separated):</label>
+  <input type="text" id="search-process" name="search-process" placeholder="Search..." size="80" value="{{ request.args['search_process'] or '' }}">
+  
+  <button type="submit" id="search-submit">Search</button>
       <label for="status-filter">Filter by execution status:</label>
       <select id="status-filter" name="status-filter">
           <option value="" {% if request.args["status_filter"] == "" %}selected{% endif %}>Any</option>
